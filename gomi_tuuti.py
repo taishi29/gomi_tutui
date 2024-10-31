@@ -1,23 +1,26 @@
-import requests  # Webサイトにデータを送るようリクエストする
-import datetime  # 日付を取得するためのライブラリ
-import os  # OSに関連する機能を提供する。ここでは環境変数にアクセスするための機能。
-from dataclasses import dataclass
-from dotenv import load_dotenv  # .envファイルの内容を環境変数として読み込む
-from bs4 import BeautifulSoup
+import requests  # Webサイトにデータを送るようリクエストする機能
+import datetime  # 日付を取得するための機能
+import os  # OSに関連する機能を提供する。ここでは環境変数にアクセスするための機能
+from dataclasses import dataclass # データ型を明確にしたデータ構造を作成するための機能
+from dotenv import load_dotenv  # .envファイルの内容を環境変数として読み込むための機能
+from bs4 import BeautifulSoup # HTMLデータを解析する機能
 from typing import List, Optional  # Optional は None を含む可能性がある型を表す
 
 
+# 関数の処理結果を格納するデータクラス
 @dataclass
 class ProcessingResult:
     success: bool
     soup: Optional[BeautifulSoup] = None
     date: Optional[datetime.date] = None
+    td_class: Optional[str] = None
     trash_kinds: Optional[List[str]] = None
     error_msg: Optional[str] = None
 
+
+# URLを環境変数として読み込み、htmlリクエストを送信、解析する関数
 def web_analysis() -> ProcessingResult:
-    # .envファイルの内容を環境変数として読み込む
-    load_dotenv()
+    load_dotenv() # .envファイルの内容を環境変数として読み込む
     load_url = os.getenv("LOAD_URL")
 
     try:
@@ -29,7 +32,9 @@ def web_analysis() -> ProcessingResult:
     except requests.RequestException as e:
         return ProcessingResult(success=False, error_msg=str(e))
 
-def get_date(date=None) -> ProcessingResult:
+
+# 引数の日付を datetime型にする。また、引数が無かったら今日の日付を取得する関数
+def get_date(date: Optional[str] = None) -> ProcessingResult:
     if date is None:
         date = datetime.date.today()
   
@@ -42,12 +47,17 @@ def get_date(date=None) -> ProcessingResult:
     
     return ProcessingResult(success=True, date=date)
 
+
+# "指定された日or今日(td_class)"の情報を取得するために、HTMLクラス属性を設定する関数(例：<td class="td5"> ※5は日付)
 def generate_class_name(date: datetime.date) -> ProcessingResult:
     if not isinstance(date, datetime.date):
         return ProcessingResult(success=False, error_msg="無効な日付オブジェクトです。")
-    td_class = "td" + str(date.day)
-    return ProcessingResult(success=True, trash_kinds=td_class)
+   
+    td_class = "td" + str(date.day) 
+    return ProcessingResult(success=True, td_class=td_class)
 
+
+# "指定された日or今日(td_element)"の"ごみ収集内容(trash_kinds_elements)"を取得するための関数(例：<td class="td5">の<p class="trash_kind_name">)
 def get_trash_kinds_name(soup: BeautifulSoup, td_class: str) -> ProcessingResult:
     td_element = soup.find("td", class_=td_class)
     if td_element is None:
@@ -55,7 +65,6 @@ def get_trash_kinds_name(soup: BeautifulSoup, td_class: str) -> ProcessingResult
         return ProcessingResult(success=False, error_msg=none_td_class)
     
     trash_kinds_elements = td_element.find_all("span", class_="trash_kind_name")
-    
     if not trash_kinds_elements:
         none_trash_kinds = "ゴミ収集内容が見つかりませんでした。"
         return ProcessingResult(success=False, error_msg=none_trash_kinds)
@@ -63,6 +72,8 @@ def get_trash_kinds_name(soup: BeautifulSoup, td_class: str) -> ProcessingResult
         trash_kinds = [item.get_text() for item in trash_kinds_elements]
         return ProcessingResult(success=True, trash_kinds=trash_kinds)
 
+
+# 各処理のエラーハンドリングをまとめた関数
 def handle_result(result: ProcessingResult) -> bool:
     if not result.success:
         print(result.error_msg)
@@ -70,29 +81,37 @@ def handle_result(result: ProcessingResult) -> bool:
     return True
 
 
-def line_notify(msg):
-    load_dotenv()
+# Line notifyを用いて、引数で受け取った処理結果のメッセージをLINEで通知する関数
+def line_notify(msg: str):
     token = os.getenv("LINE_NOTIFY_TOKEN")
-    #サーバーに送るパラメータを用意
+    # サーバーに送るパラメータを用意
     url = 'https://notify-api.line.me/api/notify'
     headers = {'Authorization': 'Bearer ' + token}
     payload = {'message': msg}
-    #requestsモジュールのpost関数を利用してメッセージを送信する
-    #ヘッダにトークン情報，パラメータにメッセージを指定する
+    # requestsモジュールのpost関数を利用してメッセージを送信する
+    # ヘッダにトークン情報，パラメータにメッセージを指定する
     requests.post(url, headers=headers, params=payload)
 
 
 # メイン処理
+'''
+～メイン処理の簡単な流れ～
+1. HTMLデータを解析
+2. 取得したいごみ収集日を設定
+3. 2を基に、HTMLのclass属性を設定
+4. 3のHTMLのclass属性で取得したいごみ収集日の情報をスクレイピングし、そこからごみ収集内容を取得
+5. LINEで通知するメッセージを作成し、実際に送信する
+'''
 html_requests = web_analysis()
 handle_result(html_requests)
 
-date_result = get_date("2024-10-09")
+date_result = get_date()
 handle_result(date_result)
 
 td_class_result = generate_class_name(date_result.date)
 handle_result(td_class_result)
 
-trash_kinds_result = get_trash_kinds_name(html_requests.soup, td_class_result.trash_kinds)
+trash_kinds_result = get_trash_kinds_name(html_requests.soup, td_class_result.td_class)
 if handle_result(trash_kinds_result):
     msg = "\n本日は、\n"
     for trash_kind in trash_kinds_result.trash_kinds:
