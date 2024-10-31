@@ -7,6 +7,9 @@ from bs4 import BeautifulSoup # HTMLデータを解析する機能
 from typing import List, Optional  # Optional は None を含む可能性がある型を表す
 
 
+load_dotenv() # .envファイルの内容を環境変数として読み込む
+
+
 # 関数の処理結果を格納するデータクラス
 @dataclass
 class ProcessingResult:
@@ -20,7 +23,6 @@ class ProcessingResult:
 
 # URLを環境変数として読み込み、htmlリクエストを送信、解析する関数
 def web_analysis() -> ProcessingResult:
-    load_dotenv() # .envファイルの内容を環境変数として読み込む
     load_url = os.getenv("LOAD_URL")
 
     try:
