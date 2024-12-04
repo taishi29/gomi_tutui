@@ -7,3 +7,5 @@
 PythonのHTML解析ライブラリの BeautifulSoup を利用して、ごみ収集日を載せているWebサイトからスクレイピングする。
 そして、LINE notifyと連携し、通知するアプリを作成する。
 
+※ LINE notifyは2025年3月31日にサービス終了するそうです。。
+
